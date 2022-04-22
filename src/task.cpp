@@ -6,6 +6,7 @@
 #include <thread>
 #include <chrono>
 #include <mutex>
+#include <fstream>
 
 #include <string.h>
 #include <unistd.h>
@@ -25,6 +26,12 @@ Task::~Task() {
 
 // Task运行解析HTTP请求，然后关闭连接
 void Task::run() {
+	this->read_lines() ;
+	this->read_property() ;
+	this->response() ;
+}
+
+void Task::read_lines() {
 	int len = 0 ;
 	char buffer[BUFSIZ + 4] ;
 	memset( buffer , 0 , BUFSIZ ) ;
@@ -40,13 +47,17 @@ void Task::run() {
 
 	// read all http request characrers
 	// 注意，这里读取所有的字符，意味着也读取了 '\r' 和 '\n'
+	int a = 0 , b = 0 , c = 0 ;
 	std::string http ; // http请求的完整内容
-	while ( len = read( this->cli_socfd , buffer , BUFSIZ ) ) {
+	while ( (len=read( this->cli_socfd , buffer , BUFSIZ )) && a+b+c < 3) {
 		// 如果描述字尚未准备好就休眠100ms
 		if ( len == -1 ) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(100)) ;
+			a = 1 ;
+			if ( b ) c = 1 ;
 			continue ;
-		}
+		} 
+		b = 1 ;
 		buffer[len] = 0 ;
 		http += std::string(buffer) ;
 	}
@@ -55,6 +66,7 @@ void Task::run() {
 	std::istringstream in(http) ;
 	do {
 		len = in.getline(buffer , BUFSIZ).gcount() ;
+		if ( len == 2 ) continue ; // 如果是空行就跳过
 		buffer[len -  2] = 0 ;
 		this->http_head.push_back( std::string(buffer) ) ;
 	} while ( in.gcount() != 2 ) ;
@@ -74,6 +86,60 @@ void Task::run() {
 	io_.unlock() ;
 }
 
+void Task::read_property(){
+	for ( int i = 0 ; i < this->http_head[0].length() ; i++ )
+		if ( this->http_head[0][i] == ' ' ) 
+			this->space.push_back( i ) ;
+	for ( int i = 1 ; i < this->http_head.size() ; i++  ) {
+		std::string &str = this->http_head[i] ;
+		int len = str.length() ;
+		for ( int j = 0 ; j < len ; j++ ) 
+			if ( str[j] == ':' ) 
+				this->other[str.substr(0 , j)] = str.substr(j + 1 , len);
+	}
+}
+
+std::string Task::request_url() {
+	return this->http_head[0].substr(
+					this->space[0] + 1, 
+					this->space[1] - this->space[0] - 1 ) ;
+}
+
+std::string Task::http_method() {
+	return this->http_head[0].substr(
+					0 ,
+					this->space[0]) ;
+}
+
+std::string Task::http_vertion() {
+	return this->http_head[0].substr(
+					this->space[1] + 1 ,
+					this->http_head[0].length() - this->space[1] - 1) ;
+}
+
+void Task::response() {
+	std::cout << "response run\n" ;
+	std::string url = this->request_url() ;
+	char buffer[BUFSIZ + 4] ;
+	if ( url == "/" ) 
+		url = this->base_path + "/index.html" ;
+	else 
+		std::string url = this->base_path + url ;
+	std::cout << url << "\n" ;
+	std::ifstream f(url) ;
+	std::string body ;
+	while ( !f.eof() ) {
+		f.read( buffer , BUFSIZ ) ;
+		buffer[f.gcount()] = 0 ;
+		body += std::string(buffer) ;
+	}
+	std::string res = this->header() + body ;
+	std::cout << res ;
+
+	f.close() ;
+}
 
 
-
+std::string Task::header() {
+	return "GET / 200 OK\r\n\r\n";
+}
