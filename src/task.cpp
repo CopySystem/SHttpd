@@ -1,4 +1,5 @@
 #include "../includes/task.h"
+#include "../includes/server.h"
 
 #include <iostream>
 #include <string>
@@ -15,12 +16,15 @@
 extern std::mutex io_ ;
 
 // 创建实例时将给定的socket描述字保存为属性
-Task::Task(int fd) :
+Task::Task(int fd ) :
 	cli_socfd(fd) {
 }
 
 // 析构时关闭描述字
 Task::~Task() {
+	io_.lock() ;
+	std::cout << "close \n\n" ;
+	io_.unlock() ;
 	close(this->cli_socfd) ;
 }
 
@@ -76,14 +80,6 @@ void Task::read_lines() {
 		buffer[in.gcount()] = 0 ;
 		this->http_body += std::string( buffer ) ;
 	}
-
-	io_.lock() ;
-	std::cout << "header : \n" ;
-	for ( auto& str : this->http_head )
-		std::cout << str << "\n" ;
-	std::cout << "body : \n" ;
-	std::cout << this->http_body ;
-	io_.unlock() ;
 }
 
 void Task::read_property(){
@@ -106,9 +102,7 @@ std::string Task::request_url() {
 }
 
 std::string Task::http_method() {
-	return this->http_head[0].substr(
-					0 ,
-					this->space[0]) ;
+	return this->http_head[0].substr( 0 , this->space[0] ) ;
 }
 
 std::string Task::http_vertion() {
@@ -118,28 +112,47 @@ std::string Task::http_vertion() {
 }
 
 void Task::response() {
-	std::cout << "response run\n" ;
 	std::string url = this->request_url() ;
 	char buffer[BUFSIZ + 4] ;
+	// 根路径所对应的文件
 	if ( url == "/" ) 
-		url = this->base_path + "/index.html" ;
+		url = Server::base_path + "/index.html" ;
 	else 
-		std::string url = this->base_path + url ;
-	std::cout << url << "\n" ;
-	std::ifstream f(url) ;
-	std::string body ;
-	while ( !f.eof() ) {
-		f.read( buffer , BUFSIZ ) ;
-		buffer[f.gcount()] = 0 ;
-		body += std::string(buffer) ;
-	}
-	std::string res = this->header() + body ;
-	std::cout << res ;
+		url = Server::base_path + url ;
+	io_.lock() ;
+	std::cout << "GET : " << url << "\n" ;
+	io_.unlock() ;
+	std::ifstream f(url , std::fstream::in) ;
 
+	// 返回的http包head和body
+	std::string head ;
+	std::string body ;
+	// 检查路径是否正确，是否存在文件。
+	if ( !f.good() ) {
+		// 404 NOT FOUND
+		f.open( "www/404.html" , std::fstream::in ) ;
+		while ( f.good() ) {
+			f.read(buffer , BUFSIZ) ;
+			buffer[f.gcount()] = 0 ;
+			body += std::string(buffer) ;
+		}
+	} else {
+		while ( !f.eof() ) {
+			f.read( buffer , BUFSIZ ) ;
+			buffer[f.gcount()] = 0 ;
+			body += std::string(buffer) ;
+		}
+	}
+	std::string response = this->create_header((int)body.size()) + body ;
+	// string.c_str()返回时会向末尾添加空字符
+	write( this->cli_socfd , response.c_str() , response.length() + 1 ) ;
 	f.close() ;
 }
 
-
-std::string Task::header() {
-	return "GET / 200 OK\r\n\r\n";
+std::string Task::create_header(int content_length) {
+	char buffer[BUFSIZ] ;
+	const char *head = "HTTP/1.0 200 OK\r\nServer: Martin Server\r\nContent-Type: text/html\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n" ;
+	memset( buffer , 0 , BUFSIZ ) ;
+	sprintf( buffer , head , content_length ) ;	
+	return std::string(buffer) ;
 }

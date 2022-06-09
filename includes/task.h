@@ -13,10 +13,9 @@ class Task {
 		std::string http_method() ;
 		std::string http_vertion() ;
 		void response() ;
-		std::string header() ;
+		std::string create_header(int) ;
 	private :
 		int cli_socfd = -1    ;
-		const std::string base_path = "www" ;
 		std::vector<std::string> http_head ;
 		std::string http_body  ;  
 		std::vector<int> space ;

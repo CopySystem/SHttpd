@@ -2,6 +2,7 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <mutex>
+#include <unistd.h>
 
 #include "includes/server.h"
 

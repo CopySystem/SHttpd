@@ -12,6 +12,8 @@
 
 extern std::mutex io_ ;
 
+std::string Server::base_path = "" ;
+
 void Server::sys_err(std::string &&msg) {
 	io_.lock() ;
 	std::cout << msg << std::endl ;
@@ -24,6 +26,22 @@ Server::~Server() {
 
 Server::Server(int p = 80) :
 	port( p ) {
+	
+	/*
+	 *	 获取可执行文件所有的目录，
+	 *	 设置其目录下的www文件夹作为服务器根路径
+	 * */
+	char path[100] ;
+	char link[100] ;
+	sprintf( link , "/proc/%d/exe" , getpid() ) ;
+	int i = readlink( link , path , sizeof( path ) ) , j ;
+	for ( j = i - 1 ; j >= 0 && path[j] != '/' ; j-- ) ;
+	path[j] = 0 ;
+	Server::base_path = std::string(path) + "/www" ;
+	
+	/*
+	 *	socket套接字初始化
+	 * */
 	this->socfd = socket( AF_INET , SOCK_STREAM , 0 ) ;
 
 	bzero( &this->addr , sizeof(addr) ) ;
@@ -38,12 +56,13 @@ Server::Server(int p = 80) :
 		this->sys_err("bind address error") ;	
 	if ( listen( this->socfd , 128 ) < 0 )
 		this->sys_err("set listen error") ;
-
-	std::cout << "init end" << std::endl ;
 }
 
+/*
+ *	等待链接，分离线程
+ * */
 void Server::run() {
-	std::cout << "server run" << "\n" ;
+	std::cout << "server run" << "\n\n" ;
 	struct sockaddr_in cli_addr ;
 	int cli_socfd = -1 , size = sizeof(cli_addr) ;
 	bzero( &cli_addr , sizeof(cli_addr) ) ;
@@ -51,6 +70,9 @@ void Server::run() {
 		cli_socfd = accept(this->socfd , 
 						   reinterpret_cast<struct sockaddr*>(&cli_addr) ,
 						   (socklen_t *)&size) ;
+		io_.lock() ;
+		std::cout << "link to : " << inet_ntoa(cli_addr.sin_addr) << "\n" ;
+		io_.unlock() ;
 
 		// create thread .. .. ..
 		if ( cli_socfd != -1 ) {
