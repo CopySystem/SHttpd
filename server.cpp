@@ -11,6 +11,9 @@
 #include <string.h>
 #include <mutex>
 
+
+#define DEBUG_IO
+
 extern std::mutex io_ ;
 
 std::string Server::base_path = "" ;
@@ -71,18 +74,22 @@ void Server::run() {
 		cli_socfd = accept(this->socfd , 
 						   reinterpret_cast<struct sockaddr*>(&cli_addr) ,
 						   (socklen_t *)&size) ;
+#ifdef DEBUG_IO
 		io_.lock() ;
 		std::cout << "link to : " << inet_ntoa(cli_addr.sin_addr) << "\n" ;
 		io_.unlock() ;
+#endif
 
 		// create thread .. .. ..
 		if ( cli_socfd != -1 ) {
 			std::function<void()> fcn = std::bind(&Server::create_task,cli_socfd) ;
             tasks.submit( fcn ) ;
 		} else {
+#ifdef DEBUG_IO
 			io_.lock() ;
 			std::cout << "cli_socfd == -1" << "\n" ;
 			io_.unlock() ;
+#endif
 		}
 
 	}

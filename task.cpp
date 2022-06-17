@@ -24,9 +24,11 @@ Task::Task(int fd ) :
 
 // 析构时关闭描述字
 Task::~Task() {
+#ifdef DEBUG_IO
 	io_.lock() ;
 	std::cout << "close \n\n" ;
 	io_.unlock() ;
+#endif
 	close(this->cli_socfd) ;
 }
 
@@ -35,6 +37,7 @@ void Task::run() {
 	this->read_lines() ;
 	this->read_property() ;
 	this->response() ;
+
 }
 
 void Task::read_lines() {
@@ -121,9 +124,11 @@ void Task::response() {
 		url = Server::base_path + "/index.html" ;
 	else 
 		url = Server::base_path + url ;
+#ifdef DEBUG_IO
 	io_.lock() ;
 	std::cout << "GET : " << url << "\n" ;
 	io_.unlock() ;
+#endif
 	std::ifstream f(url , std::fstream::in) ;
 
 	// 返回的http包head和body

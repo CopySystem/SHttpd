@@ -2,6 +2,9 @@
 #include <vector>
 #include <map>
 
+#include <memory>
+#include <chrono>
+
 class Task {
 	public :
 		Task(int) ;
@@ -20,4 +23,8 @@ class Task {
 		std::string http_body  ;  
 		std::vector<int> space ;
 		std::map<std::string,std::string> other ;
+
+		double IOTime = 0.0 ;
+		double CPUTime = 0.0 ;
+
 } ;
